@@ -1,0 +1,657 @@
+# Implementation Plan
+
+This implementation plan breaks down the real-time collaborative editor into discrete, manageable coding tasks. Each task builds incrementally on previous work, following test-driven development principles where appropriate. The plan prioritizes core functionality first, with testing tasks marked as optional.
+
+## Tasks
+
+- [x] 1. Initialize project structure and dependencies
+  - Create monorepo structure with separate client and server directories
+  - Initialize Node.js/Express backend with TypeScript configuration
+  - Initialize React frontend with TypeScript and Vite
+  - Install core dependencies: Yjs, y-websocket, ws, mongoose, jsonwebtoken, bcrypt
+  - Set up ESLint and Prettier for code quality
+  - Create .env.example files for environment configuration
+  - _Requirements: All requirements depend on proper project setup_
+
+- [x] 2. Set up MongoDB schemas and database connection
+  - [x] 2.1 Create MongoDB connection utility with error handling
+    - Write connection manager with retry logic
+    - Implement connection pooling configuration
+    - Add graceful shutdown handling
+    - _Requirements: 5.1, 5.2, 5.6_
+  - [x] 2.2 Define Mongoose schemas for User, Document, and Operation models
+    - Create User schema with email, password hash, name, preferences
+    - Create Document schema with title, owner, permissions, snapshot data
+    - Create Operation schema with document reference, Yjs update buffer, vector clock
+    - Add indexes for performance (ownerId, documentId+timestamp)
+    - _Requirements: 5.1, 5.2, 5.3, 7.2_
+  - [x] 2.3 Implement model methods for CRUD operations
+    - Write User model methods (create, findByEmail, validatePassword)
+    - Write Document model methods (create, findById, updateMetadata, softDelete)
+    - Write Operation model methods (append, findSince, compact)
+    - _Requirements: 5.1, 5.2, 12.1, 12.2, 12.3, 12.4, 12.5_
+  - [x] 2.4 Write unit tests for database models
+    - Test User model validation and password hashing
+    - Test Document model permissions array handling
+    - Test Operation model vector clock ordering
+    - _Requirements: 11.1, 11.4_
+
+- [x] 3. Implement JWT authentication system
+  - [x] 3.1 Create authentication service with token generation
+    - Implement generateToken function using RS256 algorithm
+    - Implement verifyToken function with expiration checking
+    - Create refresh token logic with longer expiration
+    - _Requirements: 7.1, 7.2_
+  - [x] 3.2 Build authentication middleware for Express
+    - Write verifyToken middleware that extracts and validates JWT
+    - Write checkDocumentPermission middleware that enforces ACLs
+    - Implement error handling for invalid/expired tokens
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - [x] 3.3 Create auth endpoints (register, login, refresh)
+    - POST /api/auth/register - create new user account
+    - POST /api/auth/login - authenticate and return tokens
+    - POST /api/auth/refresh - refresh access token
+    - Add input validation and rate limiting
+    - _Requirements: 7.1, 7.5_
+  - [ ] 3.4 Write authentication integration tests
+    - Test successful registration and login flows
+    - Test invalid credentials rejection
+    - Test token expiration and refresh
+    - Test permission enforcement
+    - _Requirements: 11.1, 11.6_
+
+- [-] 4. Build REST API for document management
+  - [x] 4.1 Create document controller with CRUD endpoints
+    - POST /api/documents - create new document
+    - GET /api/documents/:id - retrieve document by ID
+    - GET /api/documents - list user's documents with pagination
+    - PATCH /api/documents/:id - update document metadata
+    - DELETE /api/documents/:id - soft delete document
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+  - [x] 4.2 Implement document sharing endpoint
+    - POST /api/documents/:id/share - grant permissions to user
+    - Validate role parameter (owner, editor, viewer)
+    - Check that requester has admin permission
+    - Update document permissions array
+    - _Requirements: 7.2, 7.5, 12.6_
+  - [x] 4.3 Add document history endpoint
+    - GET /api/documents/:id/history - retrieve operation log
+    - Support query parameters for date range filtering
+    - Return paginated list of operations
+    - _Requirements: 5.4, 12.6_
+  - [-] 4.4 Write REST API integration tests
+    - Test document CRUD operations with authentication
+    - Test permission enforcement (viewer cannot edit)
+    - Test sharing workflow
+    - Test pagination and filtering
+    - _Requirements: 11.6_
+
+- [x] 5. Implement persistence service for Yjs snapshots
+  - [x] 5.1 Create PersistenceService class with snapshot methods
+    - Implement saveSnapshot method that stores Yjs state vector
+    - Implement loadSnapshot method that retrieves latest snapshot
+    - Add compression for snapshot data (gzip)
+    - _Requirements: 5.1, 5.2_
+  - [x] 5.2 Implement operation log methods
+    - Write appendOperation method that stores Yjs update with timestamp
+    - Write getOperationsSince method for incremental sync
+    - Implement vector clock storage for operation ordering
+    - _Requirements: 5.1, 5.3, 6.4_
+  - [x] 5.3 Build snapshot compaction logic
+    - Create background job that runs every hour
+    - Check documents with >1000 operations since last snapshot
+    - Create new snapshot and delete old operations
+    - Implement configurable retention policy (30 days)
+    - _Requirements: 5.2, 5.5_
+  - [x] 5.4 Implement time-travel functionality
+    - Write getDocumentAtTime method that replays operations
+    - Load snapshot before target time
+    - Apply operations up to target timestamp
+    - Return reconstructed Yjs state
+    - _Requirements: 5.4_
+  - [x] 5.5 Write persistence service tests
+    - Test snapshot save and load
+    - Test operation log append and retrieval
+    - Test compaction logic
+    - Test time-travel reconstruction
+    - _Requirements: 11.4_
+
+- [x] 6. Set up WebSocket server infrastructure
+  - [x] 6.1 Initialize WebSocket server with ws library
+    - Create WebSocket server attached to HTTP server
+    - Implement connection handler with error catching
+    - Add heartbeat/ping-pong for connection health
+    - Configure connection limits and timeouts
+    - _Requirements: 1.1, 1.6_
+  - [x] 6.2 Implement WebSocket authentication
+    - Extract JWT token from connection handshake query params
+    - Validate token before accepting connection
+    - Attach user info to WebSocket connection object
+    - Close connection with 401 if authentication fails
+    - _Requirements: 7.1, 7.4_
+  - [x] 6.3 Build message routing and validation
+    - Parse incoming WebSocket messages
+    - Validate message schema (type, documentId, payload)
+    - Route messages to appropriate handlers
+    - Implement error handling for malformed messages
+    - _Requirements: 9.2, 9.5_
+  - [x] 6.4 Write WebSocket server tests
+    - Test connection establishment and authentication
+    - Test message routing
+    - Test connection cleanup on disconnect
+    - _Requirements: 11.6_
+
+- [-] 7. Implement Room Manager for document sessions
+  - [x] 7.1 Create Room class with client management
+    - Define Room class with documentId, clients Map, Yjs document
+    - Implement addClient method that adds WebSocket to room
+    - Implement removeClient method with cleanup
+    - Track last activity timestamp for room cleanup
+    - _Requirements: 1.5, 8.1_
+  - [x] 7.2 Build RoomManager singleton service
+    - Implement getRoom method that creates or retrieves room
+    - Load document snapshot from persistence when creating room
+    - Implement getActiveClients method for presence
+    - Add room cleanup job for inactive rooms (>30 min idle)
+    - _Requirements: 1.5, 8.1, 8.5_
+  - [x] 7.3 Implement broadcast functionality
+    - Write broadcastToRoom method that sends message to all clients
+    - Add excludeSocket parameter to skip sender
+    - Implement backpressure handling (check socket.bufferedAmount)
+    - Log broadcast errors without crashing
+    - _Requirements: 1.2, 1.4_
+  - [x] 7.4 Write room manager tests
+    - Test room creation and client management
+    - Test broadcast functionality
+    - Test room cleanup for inactive rooms
+    - _Requirements: 11.1_
+
+- [x] 8. Integrate Yjs sync protocol on server
+  - [x] 8.1 Set up Yjs document per room
+    - Initialize Y.Doc for each room
+    - Apply loaded snapshot to Yjs document
+    - Set up update listener to persist changes
+    - _Requirements: 2.1, 2.2, 5.1_
+  - [x] 8.2 Implement Yjs sync message handlers
+    - Handle sync step 1 (state vector exchange)
+    - Handle sync step 2 (state update)
+    - Handle update messages (incremental changes)
+    - Encode/decode Yjs messages correctly
+    - _Requirements: 2.2, 2.4, 6.4_
+  - [x] 8.3 Add operation persistence on updates
+    - Listen to Yjs document update events
+    - Persist each update to operation log via PersistenceService
+    - Include vector clock for ordering
+    - Trigger snapshot creation after 1000 operations
+    - _Requirements: 5.1, 5.2_
+  - [x] 8.4 Implement duplicate operation detection
+    - Create OperationDeduplicator class with recent ops cache
+    - Check operation ID before applying
+    - Maintain cache with TTL (1 minute)
+    - _Requirements: 9.1_
+  - [x] 8.5 Write Yjs integration tests
+    - Test sync protocol message handling
+    - Test operation persistence
+    - Test duplicate detection
+    - _Requirements: 11.1, 11.2_
+
+- [x] 9. Implement awareness protocol for cursors
+  - [x] 9.1 Set up Yjs Awareness on server
+    - Create Awareness instance for each room
+    - Handle awareness update messages from clients
+    - Broadcast awareness changes to room clients
+    - Clean up awareness state on client disconnect
+    - _Requirements: 3.1, 3.5_
+  - [x] 9.2 Implement cursor update throttling
+    - Add throttle logic to limit awareness broadcasts (10/sec)
+    - Buffer awareness updates and flush periodically
+    - _Requirements: 3.3_
+  - [x] 9.3 Write awareness protocol tests
+    - Test awareness state synchronization
+    - Test throttling behavior
+    - Test cleanup on disconnect
+    - _Requirements: 11.1_
+
+- [x] 10. Set up Redis pub/sub for multi-server scaling
+  - [x] 10.1 Initialize Redis client and pub/sub channels
+    - Create Redis connection with error handling
+    - Set up publisher and subscriber clients
+    - Define channel naming convention (room:{documentId})
+    - _Requirements: 8.2_
+  - [x] 10.2 Implement cross-server message broadcasting
+    - Publish Yjs updates to Redis channel
+    - Subscribe to Redis channel and forward to local clients
+    - Add server ID to messages to prevent echo
+    - _Requirements: 8.2_
+  - [x] 10.3 Handle Redis connection failures
+    - Implement reconnection logic with exponential backoff
+    - Fall back to single-server mode if Redis unavailable
+    - Log Redis errors without crashing server
+    - _Requirements: 9.4_
+  - [ ] 10.4 Write Redis integration tests
+    - Test message publishing and subscription
+    - Test multi-server message routing
+    - Test fallback behavior
+    - _Requirements: 11.6_
+
+- [x] 11. Build React editor component foundation
+  - [x] 11.1 Create EditorContainer component
+    - Set up component with documentId, userId, token props
+    - Initialize Yjs document (Y.Doc) in useEffect
+    - Create shared text type (yText = yjsDoc.getText('content'))
+    - Add connection state management (connected, syncing, disconnected)
+    - _Requirements: 1.1, 4.1_
+  - [x] 11.2 Integrate Monaco Editor with Yjs binding
+    - Install @monaco-editor/react and y-monaco
+    - Create Monaco editor instance
+    - Bind Yjs text to Monaco model using MonacoBinding
+    - Handle editor initialization and cleanup
+    - _Requirements: 2.1, 4.1_
+  - [x] 11.3 Set up WebSocket provider
+    - Initialize WebSocketProvider with server URL and document ID
+    - Pass JWT token in connection parameters
+    - Listen to provider status events (connected, disconnected, synced)
+    - Update UI connection indicator based on status
+    - _Requirements: 1.1, 1.6, 4.4_
+  - [x] 11.4 Write editor component tests
+    - Test component initialization
+    - Test Yjs document creation
+    - Test Monaco editor binding
+    - _Requirements: 11.6_
+
+- [x] 12. Implement shared cursor visualization
+  - [x] 12.1 Create CollaborativeCursor component
+    - Set up Yjs Awareness subscription
+    - Extract cursor positions from awareness states
+    - Assign stable colors to users (hash user ID)
+    - Render cursor indicators with user names
+    - _Requirements: 3.1, 3.2, 3.6_
+  - [x] 12.2 Implement cursor position tracking
+    - Listen to Monaco editor cursor position changes
+    - Update local awareness state with cursor position
+    - Convert Monaco position to line/column format
+    - _Requirements: 3.1_
+  - [x] 12.3 Add selection highlighting
+    - Track Monaco editor selection changes
+    - Update awareness state with selection range
+    - Render remote selections with user colors
+    - _Requirements: 3.2_
+  - [x] 12.4 Implement cursor throttling on client
+    - Throttle awareness updates to 10 per second
+    - Use requestAnimationFrame for smooth rendering
+    - Debounce awareness broadcasts
+    - _Requirements: 3.3_
+  - [x] 12.5 Handle inactive cursor fading
+    - Track last update time for each remote cursor
+    - Fade cursor opacity after 30 seconds of inactivity
+    - Remove cursor on user disconnect
+    - _Requirements: 3.4, 3.5_
+  - [x] 12.6 Write cursor component tests
+    - Test cursor rendering
+    - Test color assignment
+    - Test throttling behavior
+    - _Requirements: 11.6_
+
+- [x] 13. Implement optimistic UI and latency compensation
+  - [x] 13.1 Configure local-first editing
+    - Ensure Yjs applies local changes immediately
+    - Verify Monaco editor updates without waiting for server
+    - Test typing responsiveness with simulated latency
+    - _Requirements: 4.1, 4.4_
+  - [x] 13.2 Implement server acknowledgment handling
+    - Listen to WebSocket provider sync events
+    - Track pending operations count
+    - Show syncing indicator when operations are pending
+    - _Requirements: 4.2_
+  - [x] 13.3 Add conflict resolution UI feedback
+    - Detect when remote changes affect local cursor position
+    - Preserve cursor position relative to content
+    - Avoid visible jumps during conflict resolution
+    - _Requirements: 4.3, 4.6_
+  - [x] 13.4 Write latency compensation tests
+    - Test local editing responsiveness
+    - Test cursor preservation during conflicts
+    - Inject artificial latency and verify behavior
+    - _Requirements: 11.3_
+
+- [x] 14. Build offline support and operation queue
+  - [x] 14.1 Create OfflineQueue service
+    - Implement queue using IndexedDB for persistence
+    - Store Yjs updates when WebSocket disconnected
+    - Track vector clock for operation ordering
+    - _Requirements: 6.1, 6.4_
+  - [x] 14.2 Implement offline detection
+    - Listen to WebSocket provider disconnect events
+    - Listen to browser online/offline events
+    - Update UI with offline indicator
+    - _Requirements: 6.5_
+  - [x] 14.3 Build reconnection and sync logic
+    - Detect when connection is restored
+    - Send queued operations to server in order
+    - Handle server responses and merge conflicts
+    - Clear queue after successful sync
+    - _Requirements: 6.2, 6.3_
+  - [x] 14.4 Create OfflineIndicator component
+    - Display offline banner when disconnected
+    - Show count of queued operations
+    - Display last sync time
+    - Show syncing progress during reconnection
+    - _Requirements: 6.5_
+  - [x] 14.5 Write offline support tests
+    - Test operation queueing when offline
+    - Test sync on reconnection
+    - Test conflict resolution after offline period
+    - _Requirements: 11.3, 11.6_
+
+- [x] 15. Implement document list and management UI
+  - [x] 15.1 Create DocumentList component
+    - Fetch user's documents from GET /api/documents
+    - Display documents in grid/list view
+    - Show document title, last modified, owner
+    - Implement pagination (20 documents per page)
+    - _Requirements: 12.3_
+  - [x] 15.2 Build CreateDocument component
+    - Create form with document title input
+    - Call POST /api/documents on submit
+    - Navigate to editor on successful creation
+    - Handle validation errors
+    - _Requirements: 12.1_
+  - [x] 15.3 Implement DocumentSettings component
+    - Create modal for document settings
+    - Allow editing document title (PATCH /api/documents/:id)
+    - Show document permissions list
+    - Add delete document button with confirmation
+    - _Requirements: 12.4, 12.5_
+  - [x] 15.4 Build ShareDocument component
+    - Create form to share document with user by email
+    - Select role (editor, viewer)
+    - Call POST /api/documents/:id/share
+    - Display current collaborators list
+    - _Requirements: 12.6_
+  - [x] 15.5 Write document management UI tests
+    - Test document list rendering
+    - Test document creation flow
+    - Test sharing workflow
+    - _Requirements: 11.6_
+
+- [x] 16. Add authentication UI components
+  - [x] 16.1 Create Login component
+    - Build login form with email and password fields
+    - Call POST /api/auth/login on submit
+    - Store JWT tokens in memory and refresh token in httpOnly cookie
+    - Redirect to document list on success
+    - _Requirements: 7.1_
+  - [x] 16.2 Create Register component
+    - Build registration form with email, password, name
+    - Validate password strength client-side
+    - Call POST /api/auth/register
+    - Auto-login after successful registration
+    - _Requirements: 7.5_
+  - [x] 16.3 Implement authentication context
+    - Create React context for auth state
+    - Store current user and token
+    - Implement logout function
+    - Handle token refresh automatically
+    - _Requirements: 7.1_
+  - [x]  16.4 Add protected route wrapper
+    - Create ProtectedRoute component
+    - Check authentication before rendering
+    - Redirect to login if not authenticated
+    - _Requirements: 7.1_
+  - [x] 16.5 Write authentication UI tests
+    - Test login flow
+    - Test registration flow
+    - Test protected route behavior
+    - _Requirements: 11.6_
+
+- [x] 17. Implement error handling and validation
+  - [x] 17.1 Add global error boundary
+    - Create ErrorBoundary component for React
+    - Catch and display component errors gracefully
+    - Log errors to console with context
+    - Provide recovery options (reload, go home)
+    - _Requirements: 9.4_
+  - [x] 17.2 Implement API error handling
+    - Create axios interceptor for error responses
+    - Handle 401 (redirect to login)
+    - Handle 403 (show permission error)
+    - Handle 500 (show generic error message)
+    - _Requirements: 9.5_
+  - [x] 17.3 Add input validation
+    - Validate document title length (1-200 chars)
+    - Validate email format
+    - Validate password requirements
+    - Show validation errors inline
+    - _Requirements: 9.2_
+  - [x] 17.4 Implement WebSocket error handling
+    - Handle WebSocket connection errors
+    - Show user-friendly error messages
+    - Implement automatic retry with backoff
+    - _Requirements: 9.4_
+  - [x] 17.5 Write error handling tests
+    - Test error boundary behavior
+    - Test API error handling
+    - Test validation logic
+    - _Requirements: 11.6_
+
+- [x] 18. Add monitoring and logging infrastructure
+  - [x] 18.1 Set up structured logging with Winston
+    - Configure Winston logger with JSON format
+    - Add correlation ID middleware for Express
+    - Log all requests with method, path, status, latency
+    - Configure log levels (error, warn, info, debug)
+    - _Requirements: 10.1, 10.4_
+  - [x] 18.2 Implement metrics collection
+    - Set up Prometheus client library
+    - Track operation latency histogram
+    - Track active WebSocket connections gauge
+    - Track operations per second counter
+    - _Requirements: 10.2_
+  - [x] 18.3 Create health check endpoints
+    - Implement GET /health/live for liveness probe
+    - Implement GET /health/ready that checks MongoDB and Redis
+    - Implement GET /metrics for Prometheus scraping
+    - _Requirements: 10.3_
+  - [x] 18.4 Add error logging with context
+    - Log all errors with stack traces
+    - Include user ID, document ID, operation type in logs
+    - Log permission violations for security monitoring
+    - _Requirements: 10.4, 10.5_
+  - [x] 18.5 Write monitoring tests
+    - Test health check endpoints
+    - Test metrics collection
+    - Test log format and content
+    - _Requirements: 11.6_
+
+- [x] 19. Implement rate limiting and security measures
+  - [x] 19.1 Add rate limiting middleware
+    - Install express-rate-limit
+    - Limit API requests to 100/minute per IP
+    - Limit document creation to 10/hour per user
+    - Return 429 status when limit exceeded
+    - _Requirements: 7.2_
+  - [x] 19.2 Implement WebSocket rate limiting
+    - Track operations per second per connection
+    - Disconnect clients exceeding 100 ops/sec
+    - Log rate limit violations
+    - _Requirements: 8.5_
+  - [x] 19.3 Add input sanitization
+    - Sanitize document titles and user names
+    - Validate operation size (max 1MB)
+    - Validate document size (max 10MB)
+    - _Requirements: 9.2_
+  - [x] 19.4 Implement CORS and security headers
+    - Configure CORS with allowed origins
+    - Add helmet middleware for security headers
+    - Set Content-Security-Policy
+    - Validate Origin header on WebSocket connections
+    - _Requirements: 7.1_
+  - [x] 19.5 Write security tests
+    - Test rate limiting behavior
+    - Test input sanitization
+    - Test CORS configuration
+    - _Requirements: 11.6_
+
+- [ ] 20. Build document history and versioning UI
+  - [x] 20.1 Create DocumentHistory component
+    - Fetch operation log from GET /api/documents/:id/history
+    - Display timeline of changes with timestamps
+    - Show user who made each change
+    - Implement date range filtering
+    - _Requirements: 5.4, 12.6_
+  - [x] 20.2 Implement version preview
+    - Allow clicking on history entry to preview
+    - Load document state at that point in time
+    - Display in read-only mode
+    - Show diff compared to current version
+    - _Requirements: 5.4_
+  - [x] 20.3 Add restore functionality
+    - Add "Restore to this version" button
+    - Confirm with user before restoring
+    - Create new operations to restore content
+    - Preserve history (don't delete newer operations)
+    - _Requirements: 5.4_
+  - [ ] 20.4 Write history UI tests
+    - Test history timeline rendering
+    - Test version preview
+    - Test restore functionality
+    - _Requirements: 11.6_
+
+- [ ] 21. Optimize performance and add caching
+  - [ ] 21.1 Implement operation batching
+    - Batch multiple Yjs updates into single WebSocket message
+    - Flush batch every 50ms or when 10 operations accumulated
+    - Measure and log batch efficiency
+    - _Requirements: 8.3_
+  - [ ] 21.2 Add Redis caching for documents
+    - Cache document snapshots in Redis with 5-minute TTL
+    - Check cache before loading from MongoDB
+    - Invalidate cache on document updates
+    - _Requirements: 8.3_
+  - [ ] 21.3 Optimize MongoDB queries
+    - Add compound indexes for common queries
+    - Use projection to limit returned fields
+    - Implement pagination with cursor-based approach
+    - _Requirements: 8.3_
+  - [ ] 21.4 Implement lazy loading on frontend
+    - Lazy load document list with infinite scroll
+    - Lazy load user avatars
+    - Code-split routes with React.lazy
+    - _Requirements: 8.3_
+  - [ ] 21.5 Write performance tests
+    - Benchmark operation latency
+    - Test with 100 concurrent users
+    - Measure document load time
+    - _Requirements: 11.5_
+
+- [ ] 22. Add presence and activity indicators
+  - [x] 22.1 Create PresenceIndicator component
+    - Display list of active users in document
+    - Show user avatars and names
+    - Update in real-time using awareness
+    - Show user count badge
+    - _Requirements: 3.1, 10.5_
+  - [ ] 22.2 Implement activity status
+    - Track user activity (typing, idle, away)
+    - Show "User is typing..." indicator
+    - Fade inactive users after 30 seconds
+    - _Requirements: 3.4_
+  - [ ] 22.3 Add user avatar support
+    - Store avatar URL in user preferences
+    - Display avatars in presence list
+    - Show initials if no avatar
+    - _Requirements: 3.1_
+  - [ ] 22.4 Write presence tests
+    - Test presence list rendering
+    - Test activity status updates
+    - Test avatar display
+    - _Requirements: 11.6_
+
+- [ ] 23. Create comprehensive test suites
+  - [ ] 23.1 Write CRDT convergence tests
+    - Test concurrent inserts converge to same state
+    - Test concurrent deletes preserve intent
+    - Test mixed operations (insert, delete, format)
+    - Use deterministic scenarios with known outcomes
+    - _Requirements: 11.1_
+  - [ ] 23.2 Build multi-client simulation tests
+    - Spawn 3+ WebSocket clients programmatically
+    - Each client makes random edits concurrently
+    - Verify all clients converge to identical state
+    - Test with various edit patterns
+    - _Requirements: 11.2_
+  - [ ] 23.3 Implement fault injection tests
+    - Inject 500ms network latency
+    - Simulate packet loss
+    - Kill and restart server mid-edit
+    - Verify graceful recovery
+    - _Requirements: 11.3_
+  - [ ] 23.4 Create load tests
+    - Simulate 100 concurrent users per document
+    - Measure operation latency (p50, p95, p99)
+    - Verify no data loss under load
+    - Test with large documents (100k+ characters)
+    - _Requirements: 11.5_
+  - [ ] 23.5 Write E2E tests with Playwright
+    - Test complete user workflow (register, create, edit, share)
+    - Test offline editing and sync
+    - Test multi-user collaboration
+    - Test permission enforcement
+    - _Requirements: 11.6_
+
+- [ ] 24. Create documentation and deployment configuration
+  - [x] 24.1 Write API documentation
+    - Document all REST endpoints with request/response examples
+    - Document WebSocket message protocol
+    - Document authentication flow
+    - Create Postman collection for API testing
+    - _Requirements: All requirements_
+  - [x] 24.2 Create deployment Docker files
+    - Write Dockerfile for Node.js backend
+    - Write Dockerfile for React frontend (nginx)
+    - Create docker-compose.yml for local development
+    - Configure environment variables
+    - _Requirements: All requirements_
+  - [x] 24.3 Set up CI/CD pipeline configuration
+    - Create GitHub Actions workflow for tests
+    - Add build and push Docker images step
+    - Configure deployment to staging/production
+    - Add automated rollback on failure
+    - _Requirements: All requirements_
+  - [ ] 24.4 Write README and setup instructions
+    - Document prerequisites (Node.js, MongoDB, Redis)
+    - Provide step-by-step setup instructions
+    - Document environment variables
+    - Add troubleshooting section
+    - _Requirements: All requirements_
+
+- [ ] 25. Final integration and polish
+  - [ ] 25.1 Integrate all components into main application
+    - Wire up routing between all pages
+    - Ensure consistent styling across components
+    - Add loading states and skeletons
+    - Implement smooth transitions
+    - _Requirements: All requirements_
+  - [ ] 25.2 Add responsive design for mobile/tablet
+    - Make editor responsive with media queries
+    - Optimize touch interactions
+    - Test on various screen sizes
+    - _Requirements: All requirements_
+  - [ ] 25.3 Implement accessibility features
+    - Add ARIA labels to interactive elements
+    - Ensure keyboard navigation works
+    - Test with screen readers
+    - Add focus indicators
+    - _Requirements: All requirements_
+  - [ ] 25.4 Perform end-to-end testing
+    - Test all user workflows manually
+    - Verify error handling in edge cases
+    - Test with multiple browsers
+    - Verify mobile experience
+    - _Requirements: 11.6_
+  - [ ] 25.5 Optimize bundle size and performance
+    - Analyze bundle with webpack-bundle-analyzer
+    - Code-split large dependencies
+    - Optimize images and assets
+    - Measure and optimize Core Web Vitals
+    - _Requirements: 8.3_
