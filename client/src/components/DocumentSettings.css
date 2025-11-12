@@ -271,3 +271,51 @@
 .error {
   color: #d32f2f;
 }
+
+/* Responsive Design for Document Settings */
+
+@media (max-width: 768px) {
+  .document-settings-overlay {
+    padding: 16px;
+  }
+
+  .document-settings-modal {
+    padding: 24px 20px;
+    max-width: 100%;
+    margin: 0 16px;
+  }
+
+  .document-settings-modal h2 {
+    font-size: 1.25rem;
+  }
+
+  .settings-form {
+    gap: 16px;
+  }
+
+  .settings-actions {
+    flex-direction: column-reverse;
+    gap: 12px;
+  }
+
+  .settings-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .document-settings-modal {
+    padding: 20px 16px;
+    margin: 0 12px;
+  }
+
+  .document-settings-modal h2 {
+    font-size: 1.125rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .settings-actions button {
+    min-height: 44px;
+  }
+}

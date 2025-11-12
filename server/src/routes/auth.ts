@@ -5,6 +5,7 @@ import {
   login,
   refresh,
   getCurrentUser,
+  updatePreferences,
 } from '../controllers/authController.js';
 import { verifyToken } from '../middleware/auth.js';
 
@@ -58,5 +59,11 @@ router.post('/refresh', refresh);
  * Get current authenticated user profile
  */
 router.get('/me', verifyToken, getCurrentUser);
+
+/**
+ * PATCH /api/auth/preferences
+ * Update user preferences (including avatar URL)
+ */
+router.patch('/preferences', verifyToken, updatePreferences);
 
 export default router;

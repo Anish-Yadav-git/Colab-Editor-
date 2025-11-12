@@ -5,12 +5,11 @@ import RestoreConfirmDialog from './RestoreConfirmDialog';
 
 describe('RestoreConfirmDialog', () => {
   const mockTimestamp = '2024-01-15T10:30:00.000Z';
-  let mockOnConfirm: ReturnType<typeof vi.fn>;
-  let mockOnCancel: ReturnType<typeof vi.fn>;
+  const mockOnConfirm = vi.fn();
+  const mockOnCancel = vi.fn();
 
   beforeEach(() => {
-    mockOnConfirm = vi.fn();
-    mockOnCancel = vi.fn();
+    vi.clearAllMocks();
   });
 
   it('renders confirmation dialog with formatted timestamp', () => {

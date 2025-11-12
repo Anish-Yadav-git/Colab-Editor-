@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './DocumentList.css';
 
 interface Document {
@@ -20,12 +20,9 @@ interface Document {
 }
 
 interface PaginationInfo {
-  page: number;
   limit: number;
-  total: number;
-  totalPages: number;
   hasNextPage: boolean;
-  hasPrevPage: boolean;
+  nextCursor?: string;
 }
 
 interface DocumentListProps {
@@ -42,45 +39,87 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   const [documents, setDocuments] = useState<Document[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const observerTarget = useRef<HTMLDivElement>(null);
 
+  // Initial load
   useEffect(() => {
-    fetchDocuments(currentPage);
-  }, [currentPage, token]);
+    fetchDocuments();
+  }, [token]);
 
-  const fetchDocuments = async (page: number) => {
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && pagination?.hasNextPage && !loadingMore) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [pagination, loadingMore]);
+
+  const fetchDocuments = async (cursor?: string) => {
     try {
-      setLoading(true);
+      const isInitialLoad = !cursor;
+      if (isInitialLoad) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
 
-      const response = await fetch(
-        `http://localhost:3000/api/documents?page=${page}&limit=20`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const url = new URL('http://localhost:3000/api/documents');
+      url.searchParams.append('limit', '20');
+      if (cursor) {
+        url.searchParams.append('cursor', cursor);
+      }
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error('Failed to fetch documents');
       }
 
       const data = await response.json();
-      setDocuments(data.documents);
+      
+      if (isInitialLoad) {
+        setDocuments(data.documents);
+      } else {
+        setDocuments((prev) => [...prev, ...data.documents]);
+      }
+      
       setPagination(data.pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-  };
+  const loadMore = useCallback(() => {
+    if (pagination?.nextCursor && !loadingMore) {
+      fetchDocuments(pagination.nextCursor);
+    }
+  }, [pagination?.nextCursor, loadingMore]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -124,14 +163,15 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   }
 
   return (
-    <div className="document-list-container">
+    <div className="document-list-container" role="main" aria-label="Document list">
       <div className="document-list-header">
-        <h1>My Documents</h1>
-        <div className="view-controls">
+        <h1 id="documents-heading">My Documents</h1>
+        <div className="view-controls" role="group" aria-label="View mode controls">
           <button
             className={viewMode === 'grid' ? 'active' : ''}
             onClick={() => setViewMode('grid')}
             aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
           >
             Grid
           </button>
@@ -139,6 +179,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
             className={viewMode === 'list' ? 'active' : ''}
             onClick={() => setViewMode('list')}
             aria-label="List view"
+            aria-pressed={viewMode === 'list'}
           >
             List
           </button>
@@ -146,20 +187,26 @@ export const DocumentList: React.FC<DocumentListProps> = ({
       </div>
 
       {documents.length === 0 ? (
-        <div className="empty-state">
+        <div className="empty-state" role="status">
           <p>No documents found</p>
           <p className="empty-state-hint">Create your first document to get started</p>
         </div>
       ) : (
         <>
-          <div className={`documents-${viewMode}`}>
+          <div 
+            className={`documents-${viewMode}`}
+            role="list"
+            aria-labelledby="documents-heading"
+            aria-live="polite"
+          >
             {documents.map((doc) => (
               <div
                 key={doc.id}
                 className="document-card"
                 onClick={() => onDocumentSelect?.(doc.id)}
-                role="button"
+                role="listitem"
                 tabIndex={0}
+                aria-label={`${doc.title}, ${getUserRole(doc)}, last modified ${formatDate(doc.updatedAt)}`}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -169,7 +216,9 @@ export const DocumentList: React.FC<DocumentListProps> = ({
               >
                 <div className="document-card-header">
                   <h3 className="document-title">{doc.title}</h3>
-                  <span className="document-role">{getUserRole(doc)}</span>
+                  <span className="document-role" aria-label={`Your role: ${getUserRole(doc)}`}>
+                    {getUserRole(doc)}
+                  </span>
                 </div>
                 <div className="document-card-body">
                   <div className="document-meta">
@@ -185,25 +234,10 @@ export const DocumentList: React.FC<DocumentListProps> = ({
             ))}
           </div>
 
-          {pagination && pagination.totalPages > 1 && (
-            <div className="pagination">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={!pagination.hasPrevPage || loading}
-                aria-label="Previous page"
-              >
-                Previous
-              </button>
-              <span className="pagination-info">
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={!pagination.hasNextPage || loading}
-                aria-label="Next page"
-              >
-                Next
-              </button>
+          {/* Infinite scroll trigger */}
+          {pagination?.hasNextPage && (
+            <div ref={observerTarget} className="load-more-trigger" role="status" aria-live="polite">
+              {loadingMore && <div className="loading-more">Loading more documents...</div>}
             </div>
           )}
         </>

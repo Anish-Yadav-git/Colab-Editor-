@@ -7,6 +7,8 @@ import {
   logOperation,
   extractRequestContext,
 } from '../utils/errorLogger.js';
+import { documentCacheService } from '../services/documentCacheService.js';
+import logger from '../config/logger.js';
 
 /**
  * Create a new document
@@ -76,9 +78,11 @@ export const createDocument = async (
       new mongoose.Types.ObjectId(req.user.userId)
     );
 
+    const documentId = (document._id as mongoose.Types.ObjectId).toString();
+
     logOperation(
       'create_document',
-      document._id.toString(),
+      documentId,
       req.user.userId,
       true,
       extractRequestContext(req)
@@ -171,7 +175,7 @@ export const getDocument = async (
 };
 
 /**
- * List user's documents with pagination
+ * List user's documents with cursor-based pagination
  * GET /api/documents
  */
 export const listDocuments = async (
@@ -188,18 +192,10 @@ export const listDocuments = async (
     }
 
     // Parse pagination parameters
-    const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+    const cursor = req.query.cursor as string | undefined;
 
     // Validate pagination parameters
-    if (page < 1) {
-      res.status(400).json({
-        error: 'Validation error',
-        message: 'Page must be greater than 0',
-      });
-      return;
-    }
-
     if (limit < 1 || limit > 100) {
       res.status(400).json({
         error: 'Validation error',
@@ -208,29 +204,52 @@ export const listDocuments = async (
       return;
     }
 
-    const skip = (page - 1) * limit;
     const userId = new mongoose.Types.ObjectId(req.user.userId);
 
-    // Find documents where user is owner or has permissions
-    const query = {
+    // Build query with cursor-based pagination
+    const query: any = {
       isDeleted: false,
       $or: [{ ownerId: userId }, { 'permissions.userId': userId }],
     };
 
-    const [documents, total] = await Promise.all([
-      Document.find(query)
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .select('-snapshotData')
-        .lean(),
-      Document.countDocuments(query),
-    ]);
+    // Add cursor condition for pagination
+    if (cursor) {
+      try {
+        const cursorDoc = JSON.parse(Buffer.from(cursor, 'base64').toString());
+        query.updatedAt = { $lt: new Date(cursorDoc.updatedAt) };
+      } catch (error) {
+        res.status(400).json({
+          error: 'Validation error',
+          message: 'Invalid cursor',
+        });
+        return;
+      }
+    }
 
-    const totalPages = Math.ceil(total / limit);
+    // Fetch documents with projection to exclude large fields
+    const documents = await Document.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(limit + 1) // Fetch one extra to check if there are more
+      .select('title ownerId createdAt updatedAt lastSnapshotAt permissions metadata')
+      .lean();
+
+    // Check if there are more documents
+    const hasNextPage = documents.length > limit;
+    const resultDocs = hasNextPage ? documents.slice(0, limit) : documents;
+
+    // Generate next cursor
+    let nextCursor: string | undefined;
+    if (hasNextPage && resultDocs.length > 0) {
+      const lastDoc = resultDocs[resultDocs.length - 1];
+      const cursorData = {
+        updatedAt: lastDoc.updatedAt,
+        id: lastDoc._id,
+      };
+      nextCursor = Buffer.from(JSON.stringify(cursorData)).toString('base64');
+    }
 
     res.status(200).json({
-      documents: documents.map((doc) => ({
+      documents: resultDocs.map((doc) => ({
         id: doc._id,
         title: doc.title,
         ownerId: doc.ownerId,
@@ -241,12 +260,9 @@ export const listDocuments = async (
         metadata: doc.metadata,
       })),
       pagination: {
-        page,
         limit,
-        total,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
+        hasNextPage,
+        nextCursor,
       },
     });
   } catch (error) {
@@ -401,6 +417,9 @@ export const deleteDocument = async (
       });
       return;
     }
+
+    // Invalidate cache
+    await documentCacheService.invalidateSnapshot(id);
 
     logOperation(
       'delete_document',
@@ -718,6 +737,8 @@ export const restoreDocumentVersion = async (
     document.updatedAt = new Date();
     await document.save();
 
+    // Cache is automatically updated by saveSnapshot
+
     logger.info('Document version restored', {
       documentId: id,
       userId: req.user.userId,
@@ -770,22 +791,13 @@ export const getDocumentHistory = async (
       return;
     }
 
-    // Parse pagination parameters
-    const pageParam = req.query.page as string;
+    // Parse pagination parameters with cursor-based approach
     const limitParam = req.query.limit as string;
+    const cursor = req.query.cursor as string | undefined;
     
-    const page = pageParam ? parseInt(pageParam) : 1;
     const limit = limitParam ? parseInt(limitParam) : 50;
 
     // Validate pagination parameters
-    if (isNaN(page) || page < 1) {
-      res.status(400).json({
-        error: 'Validation error',
-        message: 'Page must be greater than 0',
-      });
-      return;
-    }
-
     if (limit < 1 || limit > 100) {
       res.status(400).json({
         error: 'Validation error',
@@ -819,9 +831,7 @@ export const getDocumentHistory = async (
       return;
     }
 
-    const skip = (page - 1) * limit;
-
-    // Build query
+    // Build query with cursor
     const { Operation } = await import('../models/Operation.js');
     const query: any = {
       documentId: new mongoose.Types.ObjectId(id),
@@ -837,22 +847,48 @@ export const getDocumentHistory = async (
       }
     }
 
-    // Fetch operations and count
-    const [operations, total] = await Promise.all([
-      Operation.find(query)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('userId', 'name email')
-        .select('-yjsUpdate')
-        .lean(),
-      Operation.countDocuments(query),
-    ]);
+    // Add cursor condition
+    if (cursor) {
+      try {
+        const cursorData = JSON.parse(Buffer.from(cursor, 'base64').toString());
+        if (!query.timestamp) {
+          query.timestamp = {};
+        }
+        query.timestamp.$lt = new Date(cursorData.timestamp);
+      } catch (error) {
+        res.status(400).json({
+          error: 'Validation error',
+          message: 'Invalid cursor',
+        });
+        return;
+      }
+    }
 
-    const totalPages = Math.ceil(total / limit);
+    // Fetch operations with projection (exclude large yjsUpdate field)
+    const operations = await Operation.find(query)
+      .sort({ timestamp: -1 })
+      .limit(limit + 1) // Fetch one extra to check if there are more
+      .populate('userId', 'name email')
+      .select('documentId userId timestamp operationType metadata')
+      .lean();
+
+    // Check if there are more operations
+    const hasNextPage = operations.length > limit;
+    const resultOps = hasNextPage ? operations.slice(0, limit) : operations;
+
+    // Generate next cursor
+    let nextCursor: string | undefined;
+    if (hasNextPage && resultOps.length > 0) {
+      const lastOp = resultOps[resultOps.length - 1];
+      const cursorData = {
+        timestamp: lastOp.timestamp,
+        id: lastOp._id,
+      };
+      nextCursor = Buffer.from(JSON.stringify(cursorData)).toString('base64');
+    }
 
     res.status(200).json({
-      operations: operations.map((op) => ({
+      operations: resultOps.map((op) => ({
         id: op._id,
         documentId: op.documentId,
         userId: op.userId,
@@ -861,12 +897,9 @@ export const getDocumentHistory = async (
         metadata: op.metadata,
       })),
       pagination: {
-        page,
         limit,
-        total,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
+        hasNextPage,
+        nextCursor,
       },
       filters: {
         startDate: startDate?.toISOString(),

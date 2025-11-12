@@ -240,3 +240,75 @@
   color: #999;
   font-size: 0.875rem;
 }
+
+/* Responsive Design for Share Document */
+
+@media (max-width: 768px) {
+  .share-document-overlay {
+    padding: 16px;
+  }
+
+  .share-document-modal {
+    padding: 24px 20px;
+    max-width: 100%;
+    margin: 0 16px;
+  }
+
+  .share-document-modal h2 {
+    font-size: 1.25rem;
+  }
+
+  .share-form {
+    gap: 16px;
+  }
+
+  .share-actions {
+    flex-direction: column-reverse;
+    gap: 12px;
+  }
+
+  .share-actions button {
+    width: 100%;
+  }
+
+  .shared-users-list {
+    max-height: 200px;
+  }
+
+  .user-item {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .share-document-modal {
+    padding: 20px 16px;
+    margin: 0 12px;
+  }
+
+  .share-document-modal h2 {
+    font-size: 1.125rem;
+  }
+
+  .user-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .user-info {
+    width: 100%;
+  }
+
+  .user-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .share-actions button,
+  .user-actions button {
+    min-height: 44px;
+  }
+}

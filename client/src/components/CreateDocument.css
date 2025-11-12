@@ -139,3 +139,51 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Responsive Design for Create Document */
+
+@media (max-width: 768px) {
+  .create-document-overlay {
+    padding: 16px;
+  }
+
+  .create-document-modal {
+    padding: 24px 20px;
+    max-width: 100%;
+    margin: 0 16px;
+  }
+
+  .create-document-modal h2 {
+    font-size: 1.25rem;
+  }
+
+  .create-document-form {
+    gap: 16px;
+  }
+
+  .create-document-actions {
+    flex-direction: column-reverse;
+    gap: 12px;
+  }
+
+  .create-document-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .create-document-modal {
+    padding: 20px 16px;
+    margin: 0 12px;
+  }
+
+  .create-document-modal h2 {
+    font-size: 1.125rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .create-document-actions button {
+    min-height: 44px;
+  }
+}

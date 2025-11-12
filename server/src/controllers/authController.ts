@@ -291,3 +291,72 @@ export const getCurrentUser = async (
     });
   }
 };
+
+/**
+ * Update user preferences
+ * PATCH /api/auth/preferences
+ */
+export const updatePreferences = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        error: 'Authentication required',
+        message: 'User not authenticated',
+      });
+      return;
+    }
+
+    const { editorTheme, cursorColor, avatarUrl } = req.body;
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      res.status(404).json({
+        error: 'Not found',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    // Update preferences
+    if (editorTheme !== undefined) {
+      user.preferences.editorTheme = editorTheme;
+    }
+    if (cursorColor !== undefined) {
+      user.preferences.cursorColor = cursorColor;
+    }
+    if (avatarUrl !== undefined) {
+      // Validate avatar URL format if provided
+      if (avatarUrl && avatarUrl.length > 0) {
+        try {
+          new URL(avatarUrl);
+        } catch {
+          res.status(400).json({
+            error: 'Validation error',
+            message: 'Invalid avatar URL format',
+          });
+          return;
+        }
+      }
+      user.preferences.avatarUrl = avatarUrl || undefined;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      message: 'Preferences updated successfully',
+      preferences: user.preferences,
+    });
+  } catch (error) {
+    logError('Update preferences error', error, {
+      ...extractRequestContext(req),
+      operationType: 'update_preferences',
+    });
+    res.status(500).json({
+      error: 'Failed to update preferences',
+      message: 'An error occurred while updating preferences',
+    });
+  }
+};

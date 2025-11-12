@@ -101,7 +101,9 @@ const documentSchema = new Schema<IDocument>(
 
 // Compound indexes for performance
 documentSchema.index({ ownerId: 1, createdAt: -1 });
+documentSchema.index({ ownerId: 1, isDeleted: 1, updatedAt: -1 }); // For owner's document list
 documentSchema.index({ 'permissions.userId': 1 });
+documentSchema.index({ 'permissions.userId': 1, isDeleted: 1, updatedAt: -1 }); // For shared document list
 documentSchema.index({ isDeleted: 1, updatedAt: -1 });
 
 // Static method to create a new document

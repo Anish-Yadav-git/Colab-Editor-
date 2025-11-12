@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { redisService } from '../config/redis.js';
 import { metricsService } from '../services/metricsService.js';
+import { roomManager } from '../websocket/RoomManager.js';
+import { documentCacheService } from '../services/documentCacheService.js';
 import logger from '../config/logger.js';
 
 /**
@@ -76,9 +78,37 @@ export const readiness = async (_req: Request, res: Response): Promise<void> => 
 export const metrics = async (_req: Request, res: Response): Promise<void> => {
   try {
     const metricsText = await metricsService.getMetrics();
+    
+    // Add batch metrics as custom metrics
+    const batchMetrics = roomManager.getBatchMetrics();
+    const batchMetricsText = `
+# HELP operation_batch_total Total number of operation batches sent
+# TYPE operation_batch_total counter
+operation_batch_total ${batchMetrics.totalBatches}
+
+# HELP operation_batch_operations_total Total number of operations batched
+# TYPE operation_batch_operations_total counter
+operation_batch_operations_total ${batchMetrics.totalOperations}
+
+# HELP operation_batch_size_average Average number of operations per batch
+# TYPE operation_batch_size_average gauge
+operation_batch_size_average ${batchMetrics.averageBatchSize}
+`;
+
+    // Add cache metrics
+    const cacheStats = await documentCacheService.getCacheStats();
+    const cacheMetricsText = `
+# HELP document_cache_keys_total Total number of cached document snapshots
+# TYPE document_cache_keys_total gauge
+document_cache_keys_total ${cacheStats.totalKeys}
+
+# HELP document_cache_memory_used Redis memory used for cache
+# TYPE document_cache_memory_used gauge
+# document_cache_memory_used ${cacheStats.memoryUsed}
+`;
 
     res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    res.status(200).send(metricsText);
+    res.status(200).send(metricsText + batchMetricsText + cacheMetricsText);
   } catch (error) {
     logger.error('Failed to generate metrics', { error });
     res.status(500).json({

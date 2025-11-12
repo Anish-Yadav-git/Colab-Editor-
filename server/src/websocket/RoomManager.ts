@@ -5,8 +5,9 @@ import { redisService, RedisService } from '../config/redis.js';
 import * as Y from 'yjs';
 import { randomUUID } from 'crypto';
 import { metricsService } from '../services/metricsService.js';
-import { logError, logDatabaseError, logWebSocketError } from '../utils/errorLogger.js';
+import { logError, logDatabaseError } from '../utils/errorLogger.js';
 import logger from '../config/logger.js';
+import { operationBatcher } from './OperationBatcher.js';
 
 /**
  * RoomManager singleton service
@@ -85,28 +86,30 @@ export class RoomManager {
 
     // Set up update listener to persist changes
     room.setupUpdateListener(async (update: Uint8Array, origin: any) => {
+      // Extract user info from the origin (WebSocket)
+      let userId = 'system'; // Default for system updates
+      let clientId = 'server';
+      let sessionId = 'server-session';
+
+      if (origin && typeof origin === 'object' && 'userId' in origin) {
+        userId = origin.userId || 'system';
+        clientId = origin.userId || 'server';
+        sessionId = `session-${origin.userId || 'server'}`;
+      }
+
       try {
         // Increment operation count
         room.incrementOperationCount();
 
-        // Broadcast update to all clients in the room (except origin)
-        const updateMessage = this.createYjsUpdateMessage(update);
-        room.broadcastToRoom(updateMessage, origin);
+        // Batch operations for all clients in the room (except origin)
+        room.clients.forEach((client) => {
+          if (client.socket !== origin) {
+            operationBatcher.addOperation(documentId, update, client.socket);
+          }
+        });
 
         // Publish update to Redis for cross-server broadcasting
         await this.publishUpdateToRedis(documentId, update, origin);
-
-        // Persist the update to the operation log
-        // We need to extract user info from the origin (WebSocket)
-        let userId = 'system'; // Default for system updates
-        let clientId = 'server';
-        let sessionId = 'server-session';
-
-        if (origin && typeof origin === 'object' && 'userId' in origin) {
-          userId = origin.userId || 'system';
-          clientId = origin.userId || 'server';
-          sessionId = `session-${origin.userId || 'server'}`;
-        }
 
         // Persist operation
         await persistenceService.appendOperation(
@@ -388,19 +391,6 @@ export class RoomManager {
   }
 
   /**
-   * Create a Yjs update message for broadcasting
-   */
-  private createYjsUpdateMessage(update: Uint8Array): Buffer {
-    // Create a simple binary message with message type prefix
-    // Message format: [messageType: 1 byte][update: N bytes]
-    const messageType = 0; // 0 = SYNC message
-    const buffer = Buffer.allocUnsafe(1 + update.length);
-    buffer[0] = messageType;
-    Buffer.from(update).copy(buffer, 1);
-    return buffer;
-  }
-
-  /**
    * Create an awareness update message for broadcasting
    */
   private createAwarenessUpdateMessage(update: Uint8Array): Buffer {
@@ -503,10 +493,11 @@ export class RoomManager {
       if (data.type === 'update') {
         // Decode the update from base64
         const update = Buffer.from(data.update, 'base64');
-        const updateMessage = this.createYjsUpdateMessage(update);
 
-        // Broadcast to local clients only (origin is null to broadcast to all)
-        room.broadcastToRoom(updateMessage);
+        // Batch operations for all local clients
+        room.clients.forEach((client) => {
+          operationBatcher.addOperation(documentId, update, client.socket);
+        });
 
         logger.debug('Received Yjs update from Redis', {
           documentId,
@@ -614,17 +605,28 @@ export class RoomManager {
   }
 
   /**
+   * Get operation batcher metrics
+   */
+  getBatchMetrics() {
+    return operationBatcher.getMetrics();
+  }
+
+  /**
    * Shutdown the room manager and cleanup all rooms
    */
   async shutdown(): Promise<void> {
     logger.info('Shutting down RoomManager', {
       activeRooms: this.rooms.size,
       subscribedChannels: this.subscribedChannels.size,
+      batchMetrics: operationBatcher.getMetrics(),
       operationType: 'shutdown_room_manager',
     });
 
     // Stop cleanup job
     this.stopCleanupJob();
+
+    // Flush all pending batches
+    operationBatcher.shutdown();
 
     // Unsubscribe from all Redis channels
     const channelsToUnsubscribe = Array.from(this.subscribedChannels);

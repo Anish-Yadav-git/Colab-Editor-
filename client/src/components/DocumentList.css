@@ -2,6 +2,8 @@
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  animation: fadeIn var(--transition-normal);
+  min-height: 100vh;
 }
 
 .document-list-header {
@@ -14,7 +16,7 @@
 .document-list-header h1 {
   margin: 0;
   font-size: 2rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .view-controls {
@@ -24,21 +26,22 @@
 
 .view-controls button {
   padding: 0.5rem 1rem;
-  border: 1px solid #ddd;
-  background: white;
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  color: var(--text-primary);
 }
 
 .view-controls button:hover {
-  background: #f5f5f5;
+  background: var(--background-color);
 }
 
 .view-controls button.active {
-  background: #007bff;
+  background: var(--primary-color);
   color: white;
-  border-color: #007bff;
+  border-color: var(--primary-color);
 }
 
 .documents-grid {
@@ -56,22 +59,23 @@
 }
 
 .document-card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .document-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transform: translateY(-2px);
+  border-color: var(--primary-color);
 }
 
 .document-card:focus {
-  outline: 2px solid #007bff;
+  outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
 
@@ -85,14 +89,14 @@
 .document-title {
   margin: 0;
   font-size: 1.25rem;
-  color: #333;
+  color: var(--text-primary);
   word-break: break-word;
   flex: 1;
 }
 
 .document-role {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: rgba(100, 108, 255, 0.2);
+  color: var(--primary-color);
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -102,7 +106,7 @@
 }
 
 .document-card-body {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .document-meta {
@@ -126,15 +130,16 @@
 
 .pagination button {
   padding: 0.5rem 1rem;
-  border: 1px solid #ddd;
-  background: white;
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  color: var(--text-primary);
 }
 
 .pagination button:hover:not(:disabled) {
-  background: #f5f5f5;
+  background: var(--background-color);
 }
 
 .pagination button:disabled {
@@ -143,7 +148,7 @@
 }
 
 .pagination-info {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -151,17 +156,17 @@
 .error {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error {
-  color: #d32f2f;
+  color: var(--error-color);
 }
 
 .error button {
   margin-top: 1rem;
   padding: 0.5rem 1rem;
-  background: #007bff;
+  background: var(--primary-color);
   color: white;
   border: none;
   border-radius: 4px;
@@ -169,13 +174,13 @@
 }
 
 .error button:hover {
-  background: #0056b3;
+  background: var(--primary-hover);
 }
 
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .empty-state p {
@@ -184,5 +189,182 @@
 
 .empty-state-hint {
   font-size: 0.875rem;
-  color: #999;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.load-more-trigger {
+  padding: 2rem;
+  text-align: center;
+  min-height: 60px;
+}
+
+.loading-more {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Responsive Design for Document List */
+
+/* Tablet styles */
+@media (max-width: 1024px) {
+  .document-list-container {
+    padding: 1.5rem;
+  }
+
+  .documents-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .document-list-header h1 {
+    font-size: 1.75rem;
+  }
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .document-list-container {
+    padding: 1rem;
+  }
+
+  .document-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .document-list-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .view-controls {
+    width: 100%;
+  }
+
+  .view-controls button {
+    flex: 1;
+    padding: 0.625rem 0.75rem;
+  }
+
+  .documents-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .document-card {
+    padding: 1.25rem;
+  }
+
+  .document-card:hover {
+    transform: none; /* Disable hover transform on mobile */
+  }
+
+  .document-card:active {
+    transform: scale(0.98);
+  }
+
+  .document-title {
+    font-size: 1.125rem;
+  }
+
+  .document-meta {
+    font-size: 0.8125rem;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .pagination button {
+    min-width: 44px;
+    padding: 0.625rem 0.875rem;
+  }
+
+  .empty-state {
+    padding: 3rem 1rem;
+  }
+}
+
+/* Small mobile styles */
+@media (max-width: 480px) {
+  .document-list-container {
+    padding: 0.75rem;
+  }
+
+  .document-list-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .document-card {
+    padding: 1rem;
+  }
+
+  .document-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .document-role {
+    margin-left: 0;
+  }
+
+  .document-title {
+    font-size: 1rem;
+  }
+
+  .document-meta {
+    font-size: 0.75rem;
+  }
+
+  .pagination-info {
+    width: 100%;
+    text-align: center;
+    order: -1;
+  }
+}
+
+/* Touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .document-card {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .view-controls button,
+  .pagination button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Landscape mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .document-list-container {
+    padding: 0.75rem 1rem;
+  }
+
+  .document-list-header {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .view-controls {
+    width: auto;
+  }
+
+  .documents-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
 }

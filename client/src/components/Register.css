@@ -114,3 +114,130 @@
 .register-footer a:hover {
   text-decoration: underline;
 }
+
+/* Responsive Design for Register */
+
+/* Tablet styles */
+@media (max-width: 1024px) {
+  .register-card {
+    padding: 35px;
+    max-width: 400px;
+  }
+
+  .register-card h1 {
+    font-size: 26px;
+  }
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .register-container {
+    padding: 16px;
+  }
+
+  .register-card {
+    padding: 30px 24px;
+    max-width: 100%;
+  }
+
+  .register-card h1 {
+    font-size: 24px;
+  }
+
+  .register-subtitle {
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .register-form {
+    gap: 16px;
+  }
+
+  .register-button {
+    padding: 14px;
+    font-size: 16px;
+  }
+}
+
+/* Small mobile styles */
+@media (max-width: 480px) {
+  .register-container {
+    padding: 12px;
+  }
+
+  .register-card {
+    padding: 24px 20px;
+    border-radius: 8px;
+  }
+
+  .register-card h1 {
+    font-size: 22px;
+  }
+
+  .register-subtitle {
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  .register-form {
+    gap: 14px;
+  }
+
+  .register-error {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .password-strength {
+    gap: 8px;
+  }
+
+  .password-strength-label {
+    font-size: 11px;
+    min-width: 45px;
+  }
+
+  .register-footer {
+    font-size: 13px;
+    margin-top: 20px;
+  }
+}
+
+/* Touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .register-button {
+    min-height: 48px;
+  }
+
+  .register-button:hover {
+    transform: none;
+  }
+
+  .register-button:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Landscape mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .register-container {
+    padding: 12px;
+  }
+
+  .register-card {
+    padding: 20px 24px;
+  }
+
+  .register-card h1 {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+
+  .register-subtitle {
+    margin-bottom: 16px;
+  }
+
+  .register-form {
+    gap: 12px;
+  }
+}

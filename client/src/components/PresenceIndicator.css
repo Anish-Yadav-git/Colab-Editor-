@@ -26,7 +26,7 @@
   justify-content: center;
   position: relative;
   margin-left: -8px;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.3s ease;
 }
 
 .presence-avatar:first-child {
@@ -36,6 +36,40 @@
 .presence-avatar:hover {
   transform: scale(1.1);
   z-index: 10;
+}
+
+/* Activity status modifiers */
+.presence-avatar--idle {
+  opacity: 0.6;
+}
+
+.presence-avatar--away {
+  opacity: 0.3;
+}
+
+/* Status indicator dot */
+.presence-status-indicator {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.presence-status-indicator--typing {
+  background-color: #4caf50;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .presence-avatar img {

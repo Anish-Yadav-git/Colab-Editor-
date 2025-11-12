@@ -10,6 +10,7 @@ export interface IUser extends Document {
   preferences: {
     editorTheme: string;
     cursorColor: string;
+    avatarUrl?: string;
   };
   validatePassword(password: string): Promise<boolean>;
 }
@@ -49,6 +50,10 @@ const userSchema = new Schema<IUser>(
       cursorColor: {
         type: String,
         default: '#000000',
+      },
+      avatarUrl: {
+        type: String,
+        default: undefined,
       },
     },
   },

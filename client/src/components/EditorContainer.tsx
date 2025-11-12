@@ -20,6 +20,7 @@ export interface EditorContainerProps {
   documentId: string;
   userId: string;
   userName?: string;
+  avatarUrl?: string;
   token: string;
   readOnly?: boolean;
   serverUrl?: string;
@@ -30,6 +31,7 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
   documentId,
   userId,
   userName = 'Anonymous',
+  avatarUrl,
   token,
   readOnly = false,
   serverUrl = 'ws://localhost:3001',
@@ -221,6 +223,7 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
         id: userId,
         name: userName,
         color: userColor,
+        avatarUrl: avatarUrl,
       });
 
       // Throttle awareness updates to 10 per second (100ms interval)
@@ -230,9 +233,11 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
 
       const throttledCursorUpdate = () => {
         if (pendingCursorUpdate && providerRef.current) {
+          const now = Date.now();
           providerRef.current.awareness.setLocalStateField('cursor', pendingCursorUpdate);
+          providerRef.current.awareness.setLocalStateField('lastActivity', now);
           pendingCursorUpdate = null;
-          lastCursorUpdate = Date.now();
+          lastCursorUpdate = now;
         }
         cursorUpdateTimer = null;
       };
@@ -269,9 +274,11 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
 
       const throttledSelectionUpdate = () => {
         if (providerRef.current) {
+          const now = Date.now();
           providerRef.current.awareness.setLocalStateField('selection', pendingSelectionUpdate);
+          providerRef.current.awareness.setLocalStateField('lastActivity', now);
           pendingSelectionUpdate = null;
-          lastSelectionUpdate = Date.now();
+          lastSelectionUpdate = now;
         }
         selectionUpdateTimer = null;
       };
@@ -319,10 +326,18 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
   };
 
   return (
-    <div className="editor-container">
-      <div className="editor-header">
-        <div className="connection-indicator">
-          <span className={`status-dot status-${connectionState}`}></span>
+    <div className="editor-container" role="main" aria-label="Collaborative document editor">
+      <div className="editor-header" role="banner">
+        <div 
+          className="connection-indicator" 
+          role="status" 
+          aria-live="polite"
+          aria-label={`Connection status: ${connectionState}`}
+        >
+          <span 
+            className={`status-dot status-${connectionState}`}
+            aria-hidden="true"
+          ></span>
           <span className="status-text">
             {connectionState === 'connected' && syncStatus.isSynced && 'Connected'}
             {connectionState === 'syncing' && (
@@ -338,7 +353,7 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
         </div>
         <PresenceIndicator awareness={providerRef.current?.awareness || null} />
       </div>
-      <div className="editor-content">
+      <div className="editor-content" role="region" aria-label="Document editor">
         <Editor
           height="100%"
           defaultLanguage="plaintext"
@@ -351,6 +366,7 @@ export const EditorContainer: React.FC<EditorContainerProps> = ({
             lineNumbers: 'on',
             scrollBeyondLastLine: false,
             automaticLayout: true,
+            ariaLabel: readOnly ? 'Read-only document content' : 'Editable document content',
           }}
         />
         <CollaborativeCursor

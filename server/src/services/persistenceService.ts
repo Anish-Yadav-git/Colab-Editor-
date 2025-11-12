@@ -5,6 +5,8 @@ import { promisify } from 'util';
 import { gzip, gunzip } from 'zlib';
 import * as Y from 'yjs';
 import { logDatabaseError } from '../utils/errorLogger.js';
+import { documentCacheService } from './documentCacheService.js';
+import logger from '../config/logger.js';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -29,6 +31,16 @@ export class PersistenceService {
         lastSnapshotAt: new Date(),
       },
     });
+
+    // Cache the uncompressed snapshot in Redis
+    await documentCacheService.setSnapshot(documentId, yjsState);
+
+    logger.debug('Saved and cached document snapshot', {
+      documentId,
+      snapshotSize: yjsState.length,
+      compressedSize: compressed.length,
+      operationType: 'save_snapshot',
+    });
   }
 
   /**
@@ -37,6 +49,18 @@ export class PersistenceService {
    * @returns The decompressed Yjs state vector or null if no snapshot exists
    */
   async loadSnapshot(documentId: string): Promise<Uint8Array | null> {
+    // Try to get from cache first
+    const cached = await documentCacheService.getSnapshot(documentId);
+    if (cached) {
+      logger.debug('Loaded snapshot from cache', {
+        documentId,
+        snapshotSize: cached.length,
+        operationType: 'load_snapshot_cached',
+      });
+      return cached;
+    }
+
+    // Cache miss - load from database
     const document = await Document.findById(documentId);
 
     if (!document || !document.snapshotData) {
@@ -45,7 +69,18 @@ export class PersistenceService {
 
     // Decompress the snapshot data
     const decompressed = await gunzipAsync(document.snapshotData);
-    return new Uint8Array(decompressed);
+    const snapshot = new Uint8Array(decompressed);
+
+    // Cache for future requests
+    await documentCacheService.setSnapshot(documentId, snapshot);
+
+    logger.debug('Loaded snapshot from database and cached', {
+      documentId,
+      snapshotSize: snapshot.length,
+      operationType: 'load_snapshot_db',
+    });
+
+    return snapshot;
   }
 
   /**
@@ -81,6 +116,9 @@ export class PersistenceService {
     await Document.findByIdAndUpdate(documentId, {
       $inc: { 'metadata.operationCount': 1 },
     });
+
+    // Note: We don't invalidate cache here as operations are incremental
+    // Cache will be updated when a new snapshot is created
   }
 
   /**
@@ -222,10 +260,12 @@ export class PersistenceService {
 
     for (const doc of documents) {
       try {
-        await this.compactOperations(doc._id.toString());
+        const docId = (doc._id as mongoose.Types.ObjectId).toString();
+        await this.compactOperations(docId);
       } catch (error) {
+        const docId = (doc._id as mongoose.Types.ObjectId).toString();
         logDatabaseError('compactOperations', error, {
-          documentId: doc._id.toString(),
+          documentId: docId,
           operationType: 'compact_operations',
         });
       }
