@@ -1,921 +1,620 @@
-# Deployment Guide
+# 🚀 Deployment Guide
 
-This guide covers deploying the Real-Time Collaborative Editor to production environments.
+## 📖 What is Deployment?
 
-## Table of Contents
+**Deployment** is the process of making your application available on the internet so others can use it.
 
-1. [Pre-Deployment Checklist](#pre-deployment-checklist)
-2. [Environment Configuration](#environment-configuration)
-3. [Docker Deployment](#docker-deployment)
-4. [Kubernetes Deployment](#kubernetes-deployment)
-5. [Cloud Platform Deployment](#cloud-platform-deployment)
-6. [Database Setup](#database-setup)
-7. [SSL/TLS Configuration](#ssltls-configuration)
-8. [Monitoring Setup](#monitoring-setup)
-9. [Backup Strategy](#backup-strategy)
-10. [Scaling Considerations](#scaling-considerations)
-11. [Security Hardening](#security-hardening)
-12. [Rollback Procedures](#rollback-procedures)
+### Development vs Production
 
----
+| Aspect | Development (Local) | Production (Deployed) |
+|--------|-------------------|---------------------|
+| **Access** | Only you (localhost) | Everyone (internet) |
+| **URL** | `localhost:5173` | `yourdomain.com` |
+| **Database** | Local PostgreSQL | Cloud database |
+| **Performance** | Debug mode, slower | Optimized, faster |
+| **Security** | Relaxed | Strict |
+| **Cost** | Free | Paid (hosting fees) |
 
-## Pre-Deployment Checklist
+### Why Deploy?
 
-Before deploying to production, ensure you have completed the following:
-
-### Security
-
-- [ ] Generate secure JWT secrets (minimum 32 characters)
-- [ ] Enable MongoDB authentication
-- [ ] Set Redis password
-- [ ] Configure CORS with specific allowed origins
-- [ ] Enable HTTPS/TLS for all connections
-- [ ] Review and configure security headers
-- [ ] Set up rate limiting
-- [ ] Enable input validation and sanitization
-- [ ] Configure firewall rules
-
-### Infrastructure
-
-- [ ] Provision MongoDB cluster (replica set recommended)
-- [ ] Provision Redis cluster for pub/sub
-- [ ] Set up load balancer
-- [ ] Configure DNS records
-- [ ] Obtain SSL/TLS certificates
-- [ ] Set up monitoring and alerting
-- [ ] Configure log aggregation
-- [ ] Plan backup strategy
-
-### Application
-
-- [ ] Set `NODE_ENV=production`
-- [ ] Build and test Docker images
-- [ ] Run all tests and ensure they pass
-- [ ] Perform security audit (`npm audit`)
-- [ ] Review and optimize bundle sizes
-- [ ] Configure environment variables
-- [ ] Test health check endpoints
-- [ ] Verify WebSocket connections work through load balancer
-
-### Documentation
-
-- [ ] Document deployment architecture
-- [ ] Create runbooks for common operations
-- [ ] Document rollback procedures
-- [ ] Create incident response plan
-- [ ] Document monitoring and alerting setup
+- ✅ **Share with others**: Let people use your app
+- ✅ **Portfolio**: Show employers your work
+- ✅ **Real users**: Get feedback and usage data
+- ✅ **24/7 availability**: Always online
+- ✅ **Professional**: Real domain name
 
 ---
 
-## Environment Configuration
+## 🎯 Deployment Options
 
-### Production Environment Variables
+### Option 1: Docker (Easiest) ⭐ Recommended
 
-Create a secure `.env` file with production values:
+**Best for**: Quick deployment, consistent environment
+
+**Pros**:
+- Everything packaged together
+- Works the same everywhere
+- Easy to update
+
+**Cons**:
+- Requires Docker knowledge
+- Slightly more resources
+
+### Option 2: Cloud Platforms (Most Popular)
+
+**Best for**: Production apps, scalability
+
+Popular platforms:
+- **Heroku** - Easiest, free tier available
+- **Railway** - Modern, simple
+- **Render** - Good free tier
+- **DigitalOcean** - More control
+- **AWS/Azure/GCP** - Enterprise-grade
+
+### Option 3: VPS (Most Control)
+
+**Best for**: Custom setups, learning
+
+Providers:
+- DigitalOcean Droplets
+- Linode
+- Vultr
+- AWS EC2
+
+---
+
+## 🐳 Option 1: Docker Deployment (Recommended)
+
+### What You Need
+
+- Docker installed
+- Docker Compose installed
+- A server (VPS) or cloud platform
+
+### Step 1: Prepare for Production
+
+**Update environment variables** in `server/.env`:
 
 ```env
-# Application
+# Production settings
 NODE_ENV=production
-PORT=3001
 
-# MongoDB (use connection string with authentication)
-MONGODB_URI=mongodb://username:password@mongodb-host:27017/collaborative_editor?authSource=admin&replicaSet=rs0
+# Database (use cloud database)
+DATABASE_URL=postgresql://user:password@your-db-host:5432/collab_editor
 
-# Redis (use password and TLS if available)
-REDIS_HOST=redis-host
+# Redis (use cloud Redis)
+REDIS_HOST=your-redis-host
 REDIS_PORT=6379
-REDIS_PASSWORD=secure-redis-password
-REDIS_TLS=true
+REDIS_PASSWORD=your-redis-password
 
-# JWT Secrets (MUST be different from development)
-JWT_SECRET=<generate-secure-32-char-secret>
-JWT_REFRESH_SECRET=<generate-secure-32-char-secret>
+# JWT Secret (IMPORTANT: Change this!)
+JWT_SECRET=your-super-secret-production-key-min-32-chars
 
-# CORS (specify exact origins)
-CORS_ORIGIN=https://yourdomain.com,https://www.yourdomain.com
-
-# Logging
-LOG_LEVEL=info
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=100
+# Server URLs (use your domain)
+PORT=3000
+WS_PORT=3001
+CLIENT_URL=https://yourdomain.com
 ```
 
-### Generating Secure Secrets
-
-Use cryptographically secure random strings:
+### Step 2: Build Docker Images
 
 ```bash
-# Using Node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Build all services
+docker-compose build
 
-# Using OpenSSL
-openssl rand -hex 32
+# Or build individually
+docker build -t collab-editor-client ./client
+docker build -t collab-editor-server ./server
+```
 
-# Using Python
-python3 -c "import secrets; print(secrets.token_hex(32))"
+### Step 3: Deploy with Docker Compose
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+### Step 4: Set Up Database
+
+```bash
+# Run migrations
+docker-compose exec server npm run migrate
+
+# Or manually
+docker-compose exec postgres psql -U postgres -d collab_editor
 ```
 
 ---
 
-## Docker Deployment
+## ☁️ Option 2: Deploy to Heroku (Free Tier)
 
-### Building Production Images
+### What You Need
 
-#### Backend Image
+- Heroku account (free)
+- Heroku CLI installed
+- Git repository
+
+### Step 1: Install Heroku CLI
 
 ```bash
-cd server
-docker build -t collab-editor-server:v1.0.0 .
+# macOS
+brew tap heroku/brew && brew install heroku
+
+# Windows
+# Download from: https://devcenter.heroku.com/articles/heroku-cli
+
+# Linux
+curl https://cli-assets.heroku.com/install.sh | sh
 ```
 
-#### Frontend Image
+### Step 2: Login to Heroku
+
+```bash
+heroku login
+```
+
+### Step 3: Create Heroku Apps
+
+```bash
+# Create app for server
+heroku create your-app-name-server
+
+# Create app for client
+heroku create your-app-name-client
+```
+
+### Step 4: Add PostgreSQL and Redis
+
+```bash
+# Add PostgreSQL
+heroku addons:create heroku-postgresql:mini -a your-app-name-server
+
+# Add Redis
+heroku addons:create heroku-redis:mini -a your-app-name-server
+```
+
+### Step 5: Set Environment Variables
+
+```bash
+# Set JWT secret
+heroku config:set JWT_SECRET=your-super-secret-key -a your-app-name-server
+
+# Set Node environment
+heroku config:set NODE_ENV=production -a your-app-name-server
+
+# Set client URL
+heroku config:set CLIENT_URL=https://your-app-name-client.herokuapp.com -a your-app-name-server
+```
+
+### Step 6: Deploy Server
+
+```bash
+# From project root
+cd server
+
+# Initialize git if needed
+git init
+git add .
+git commit -m "Initial commit"
+
+# Add Heroku remote
+heroku git:remote -a your-app-name-server
+
+# Deploy
+git push heroku main
+
+# Run migrations
+heroku run npm run migrate -a your-app-name-server
+```
+
+### Step 7: Deploy Client
+
+```bash
+# From project root
+cd client
+
+# Build for production
+npm run build
+
+# Deploy (you'll need to set up static hosting)
+# Option A: Use Heroku buildpack
+# Option B: Use Netlify/Vercel (see below)
+```
+
+---
+
+## 🌐 Option 3: Deploy to Netlify (Client) + Railway (Server)
+
+### Deploy Client to Netlify
+
+**Step 1**: Build the client
 
 ```bash
 cd client
-docker build -t collab-editor-client:v1.0.0 .
+npm run build
+# Creates 'dist' folder
 ```
 
-### Docker Compose Production Setup
+**Step 2**: Deploy to Netlify
 
-Create `docker-compose.prod.yml`:
+1. Go to [netlify.com](https://netlify.com)
+2. Sign up/login
+3. Click "Add new site" → "Deploy manually"
+4. Drag and drop the `client/dist` folder
+5. Your site is live!
 
-```yaml
-version: '3.8'
+**Step 3**: Set environment variables
 
-services:
-  mongodb:
-    image: mongo:7
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - backend
-    command: mongod --replSet rs0
+In Netlify dashboard:
+- Go to Site settings → Environment variables
+- Add `VITE_API_URL` = your server URL
 
-  redis:
-    image: redis:7-alpine
-    restart: always
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - backend
+### Deploy Server to Railway
 
-  server:
-    image: collab-editor-server:v1.0.0
-    restart: always
-    depends_on:
-      - mongodb
-      - redis
-    environment:
-      NODE_ENV: production
-      MONGODB_URI: ${MONGODB_URI}
-      REDIS_HOST: redis
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-    networks:
-      - backend
-      - frontend
-    deploy:
-      replicas: 3
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+**Step 1**: Sign up at [railway.app](https://railway.app)
 
-  client:
-    image: collab-editor-client:v1.0.0
-    restart: always
-    networks:
-      - frontend
-    deploy:
-      replicas: 2
+**Step 2**: Create new project
 
-  nginx:
-    image: nginx:alpine
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    networks:
-      - frontend
-    depends_on:
-      - server
-      - client
+1. Click "New Project"
+2. Select "Deploy from GitHub repo"
+3. Connect your repository
+4. Select the `server` directory
 
-volumes:
-  mongodb_data:
-  redis_data:
+**Step 3**: Add PostgreSQL and Redis
 
-networks:
-  backend:
-  frontend:
-```
+1. Click "New" → "Database" → "PostgreSQL"
+2. Click "New" → "Database" → "Redis"
+3. Railway automatically connects them
 
-### Deploy with Docker Compose
+**Step 4**: Set environment variables
+
+In Railway dashboard:
+- `NODE_ENV` = `production`
+- `JWT_SECRET` = your secret key
+- `CLIENT_URL` = your Netlify URL
+
+**Step 5**: Deploy
+
+Railway automatically deploys on git push!
+
+---
+
+## 🖥️ Option 4: Deploy to VPS (DigitalOcean)
+
+### What You Need
+
+- DigitalOcean account
+- Domain name (optional)
+- SSH knowledge
+
+### Step 1: Create Droplet
+
+1. Go to [digitalocean.com](https://digitalocean.com)
+2. Create account
+3. Create Droplet:
+   - **Image**: Ubuntu 22.04
+   - **Plan**: Basic ($6/month)
+   - **Region**: Closest to users
+   - **Authentication**: SSH key
+
+### Step 2: Connect to Server
 
 ```bash
-# Load environment variables
-export $(cat .env | xargs)
-
-# Deploy
-docker-compose -f docker-compose.prod.yml up -d
-
-# Check status
-docker-compose -f docker-compose.prod.yml ps
-
-# View logs
-docker-compose -f docker-compose.prod.yml logs -f
-
-# Scale services
-docker-compose -f docker-compose.prod.yml up -d --scale server=5
+ssh root@your-droplet-ip
 ```
 
----
-
-## Kubernetes Deployment
-
-### Prerequisites
-
-- Kubernetes cluster (1.24+)
-- kubectl configured
-- Helm 3 (optional)
-
-### Kubernetes Manifests
-
-#### Namespace
-
-```yaml
-# namespace.yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: collab-editor
-```
-
-#### ConfigMap
-
-```yaml
-# configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: collab-editor-config
-  namespace: collab-editor
-data:
-  NODE_ENV: "production"
-  PORT: "3001"
-  REDIS_HOST: "redis-service"
-  REDIS_PORT: "6379"
-  LOG_LEVEL: "info"
-```
-
-#### Secrets
-
-```yaml
-# secrets.yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: collab-editor-secrets
-  namespace: collab-editor
-type: Opaque
-stringData:
-  mongodb-uri: "mongodb://username:password@mongodb:27017/collaborative_editor"
-  redis-password: "your-redis-password"
-  jwt-secret: "your-jwt-secret"
-  jwt-refresh-secret: "your-jwt-refresh-secret"
-```
-
-#### Server Deployment
-
-```yaml
-# server-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: collab-editor-server
-  namespace: collab-editor
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: collab-editor-server
-  template:
-    metadata:
-      labels:
-        app: collab-editor-server
-    spec:
-      containers:
-      - name: server
-        image: ghcr.io/your-org/collab-editor-server:v1.0.0
-        ports:
-        - containerPort: 3001
-        envFrom:
-        - configMapRef:
-            name: collab-editor-config
-        env:
-        - name: MONGODB_URI
-          valueFrom:
-            secretKeyRef:
-              name: collab-editor-secrets
-              key: mongodb-uri
-        - name: REDIS_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: collab-editor-secrets
-              key: redis-password
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: collab-editor-secrets
-              key: jwt-secret
-        - name: JWT_REFRESH_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: collab-editor-secrets
-              key: jwt-refresh-secret
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "500m"
-          limits:
-            memory: "1Gi"
-            cpu: "1000m"
-        livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 3001
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health/ready
-            port: 3001
-          initialDelaySeconds: 10
-          periodSeconds: 5
-```
-
-#### Server Service
-
-```yaml
-# server-service.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: collab-editor-server
-  namespace: collab-editor
-spec:
-  selector:
-    app: collab-editor-server
-  ports:
-  - protocol: TCP
-    port: 3001
-    targetPort: 3001
-  type: ClusterIP
-```
-
-#### Ingress
-
-```yaml
-# ingress.yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: collab-editor-ingress
-  namespace: collab-editor
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/websocket-services: "collab-editor-server"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - yourdomain.com
-    secretName: collab-editor-tls
-  rules:
-  - host: yourdomain.com
-    http:
-      paths:
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: collab-editor-server
-            port:
-              number: 3001
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: collab-editor-client
-            port:
-              number: 8080
-```
-
-### Deploy to Kubernetes
+### Step 3: Install Dependencies
 
 ```bash
-# Create namespace
-kubectl apply -f namespace.yaml
+# Update system
+apt update && apt upgrade -y
 
-# Create secrets (use kubectl create secret instead of YAML for security)
-kubectl create secret generic collab-editor-secrets \
-  --from-literal=mongodb-uri='mongodb://...' \
-  --from-literal=redis-password='...' \
-  --from-literal=jwt-secret='...' \
-  --from-literal=jwt-refresh-secret='...' \
-  -n collab-editor
+# Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt install -y nodejs
 
-# Apply configurations
-kubectl apply -f configmap.yaml
-kubectl apply -f server-deployment.yaml
-kubectl apply -f server-service.yaml
-kubectl apply -f client-deployment.yaml
-kubectl apply -f client-service.yaml
-kubectl apply -f ingress.yaml
+# Install PostgreSQL
+apt install -y postgresql postgresql-contrib
 
-# Check status
-kubectl get pods -n collab-editor
-kubectl get services -n collab-editor
-kubectl get ingress -n collab-editor
+# Install Redis
+apt install -y redis-server
 
-# View logs
-kubectl logs -f deployment/collab-editor-server -n collab-editor
+# Install Nginx (web server)
+apt install -y nginx
 
-# Scale deployment
-kubectl scale deployment collab-editor-server --replicas=5 -n collab-editor
+# Install PM2 (process manager)
+npm install -g pm2
 ```
 
----
-
-## Cloud Platform Deployment
-
-### AWS Deployment
-
-#### Using ECS Fargate
-
-1. **Create ECR Repositories:**
-   ```bash
-   aws ecr create-repository --repository-name collab-editor-server
-   aws ecr create-repository --repository-name collab-editor-client
-   ```
-
-2. **Push Images:**
-   ```bash
-   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
-   
-   docker tag collab-editor-server:v1.0.0 <account-id>.dkr.ecr.us-east-1.amazonaws.com/collab-editor-server:v1.0.0
-   docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/collab-editor-server:v1.0.0
-   ```
-
-3. **Create ECS Cluster:**
-   ```bash
-   aws ecs create-cluster --cluster-name collab-editor-cluster
-   ```
-
-4. **Create Task Definition** (use AWS Console or CloudFormation)
-
-5. **Create Service:**
-   ```bash
-   aws ecs create-service \
-     --cluster collab-editor-cluster \
-     --service-name collab-editor-server \
-     --task-definition collab-editor-server:1 \
-     --desired-count 3 \
-     --launch-type FARGATE
-   ```
-
-#### Database Setup
-
-- **MongoDB:** Use MongoDB Atlas or DocumentDB
-- **Redis:** Use ElastiCache for Redis
-
-### Google Cloud Deployment
-
-#### Using Cloud Run
-
-1. **Build and Push Images:**
-   ```bash
-   gcloud builds submit --tag gcr.io/PROJECT_ID/collab-editor-server
-   ```
-
-2. **Deploy to Cloud Run:**
-   ```bash
-   gcloud run deploy collab-editor-server \
-     --image gcr.io/PROJECT_ID/collab-editor-server \
-     --platform managed \
-     --region us-central1 \
-     --allow-unauthenticated \
-     --set-env-vars NODE_ENV=production
-   ```
-
-#### Database Setup
-
-- **MongoDB:** Use MongoDB Atlas
-- **Redis:** Use Cloud Memorystore
-
-### Azure Deployment
-
-#### Using Container Instances
-
-1. **Create Resource Group:**
-   ```bash
-   az group create --name collab-editor-rg --location eastus
-   ```
-
-2. **Deploy Container:**
-   ```bash
-   az container create \
-     --resource-group collab-editor-rg \
-     --name collab-editor-server \
-     --image your-registry/collab-editor-server:v1.0.0 \
-     --cpu 1 --memory 1 \
-     --ports 3001 \
-     --environment-variables NODE_ENV=production
-   ```
-
-#### Database Setup
-
-- **MongoDB:** Use Cosmos DB (MongoDB API)
-- **Redis:** Use Azure Cache for Redis
-
----
-
-## Database Setup
-
-### MongoDB Production Configuration
-
-#### Replica Set Setup
+### Step 4: Set Up Database
 
 ```bash
-# Initialize replica set
-mongosh --eval "rs.initiate({
-  _id: 'rs0',
-  members: [
-    { _id: 0, host: 'mongodb1:27017' },
-    { _id: 1, host: 'mongodb2:27017' },
-    { _id: 2, host: 'mongodb3:27017' }
-  ]
-})"
+# Switch to postgres user
+sudo -u postgres psql
 
-# Create application user
-mongosh --eval "
-  use admin
-  db.createUser({
-    user: 'collab_app',
-    pwd: 'secure-password',
-    roles: [
-      { role: 'readWrite', db: 'collaborative_editor' }
-    ]
-  })
-"
+# Create database and user
+CREATE DATABASE collab_editor;
+CREATE USER collab_user WITH PASSWORD 'your-password';
+GRANT ALL PRIVILEGES ON DATABASE collab_editor TO collab_user;
+\q
 ```
 
-#### Indexes
+### Step 5: Clone and Set Up Project
 
-Create indexes for optimal performance:
+```bash
+# Clone repository
+cd /var/www
+git clone your-repo-url collab-editor
+cd collab-editor
 
-```javascript
-// Documents collection
-db.documents.createIndex({ ownerId: 1, createdAt: -1 });
-db.documents.createIndex({ 'permissions.userId': 1 });
-db.documents.createIndex({ isDeleted: 1, updatedAt: -1 });
-
-// Operations collection
-db.operations.createIndex({ documentId: 1, timestamp: -1 });
-db.operations.createIndex(
-  { timestamp: 1 },
-  { expireAfterSeconds: 2592000 } // 30 days TTL
-);
-
-// Users collection
-db.users.createIndex({ email: 1 }, { unique: true });
+# Install dependencies
+npm install
+cd client && npm install && npm run build
+cd ../server && npm install && npm run build
 ```
 
-### Redis Production Configuration
+### Step 6: Configure Environment
 
-```conf
-# redis.conf
-bind 0.0.0.0
-protected-mode yes
-port 6379
-requirepass your-secure-password
+```bash
+# Create .env file
+cd /var/www/collab-editor/server
+nano .env
 
-# Persistence
-appendonly yes
-appendfsync everysec
-
-# Memory
-maxmemory 2gb
-maxmemory-policy allkeys-lru
-
-# Security
-rename-command FLUSHDB ""
-rename-command FLUSHALL ""
-rename-command CONFIG ""
+# Add production settings (see above)
 ```
 
----
+### Step 7: Start with PM2
 
-## SSL/TLS Configuration
+```bash
+# Start server
+cd /var/www/collab-editor/server
+pm2 start dist/index.js --name collab-server
 
-### Using Let's Encrypt with Nginx
+# Start WebSocket server
+pm2 start dist/websocket/WebSocketServer.js --name collab-ws
+
+# Save PM2 configuration
+pm2 save
+pm2 startup
+```
+
+### Step 8: Configure Nginx
+
+```bash
+# Create Nginx configuration
+nano /etc/nginx/sites-available/collab-editor
+```
+
+Add this configuration:
 
 ```nginx
-# nginx.conf
 server {
     listen 80;
     server_name yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
 
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-    # WebSocket support
+    # Client (static files)
     location / {
-        proxy_pass http://backend;
+        root /var/www/collab-editor/client/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API
+    location /api {
+        proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # WebSocket
+    location /ws {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
     }
 }
 ```
 
-### Obtaining Certificates
+Enable the site:
 
 ```bash
-# Install certbot
-sudo apt-get install certbot python3-certbot-nginx
-
-# Obtain certificate
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
-
-# Auto-renewal
-sudo certbot renew --dry-run
+ln -s /etc/nginx/sites-available/collab-editor /etc/nginx/sites-enabled/
+nginx -t
+systemctl restart nginx
 ```
 
----
-
-## Monitoring Setup
-
-### Prometheus Configuration
-
-```yaml
-# prometheus.yml
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'collab-editor'
-    static_configs:
-      - targets: ['server:3001']
-    metrics_path: '/metrics'
-```
-
-### Grafana Dashboard
-
-Import the provided dashboard or create custom panels:
-
-- Request latency (p50, p95, p99)
-- Active WebSocket connections
-- Operations per second
-- Error rate
-- Database connection status
-
-### Alerting Rules
-
-```yaml
-# alerts.yml
-groups:
-  - name: collab-editor
-    rules:
-      - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
-        for: 5m
-        annotations:
-          summary: "High error rate detected"
-      
-      - alert: DatabaseDown
-        expr: mongodb_connection_status == 0
-        for: 1m
-        annotations:
-          summary: "MongoDB connection lost"
-```
-
----
-
-## Backup Strategy
-
-### MongoDB Backups
+### Step 9: Set Up SSL (HTTPS)
 
 ```bash
-# Daily backup script
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/backups/mongodb"
+# Install Certbot
+apt install -y certbot python3-certbot-nginx
 
-mongodump \
-  --uri="mongodb://username:password@localhost:27017/collaborative_editor" \
-  --out="$BACKUP_DIR/$DATE"
+# Get SSL certificate
+certbot --nginx -d yourdomain.com
 
-# Compress backup
-tar -czf "$BACKUP_DIR/$DATE.tar.gz" "$BACKUP_DIR/$DATE"
-rm -rf "$BACKUP_DIR/$DATE"
-
-# Upload to S3
-aws s3 cp "$BACKUP_DIR/$DATE.tar.gz" s3://your-backup-bucket/mongodb/
-
-# Cleanup old backups (keep 30 days)
-find "$BACKUP_DIR" -name "*.tar.gz" -mtime +30 -delete
+# Auto-renewal is set up automatically
 ```
 
-### Redis Backups
+---
 
-Redis automatically creates snapshots with AOF enabled. Copy RDB/AOF files:
+## 🔒 Production Checklist
+
+Before deploying to production:
+
+### Security
+- [ ] Change JWT_SECRET to strong random string
+- [ ] Use HTTPS (SSL certificate)
+- [ ] Set NODE_ENV=production
+- [ ] Enable CORS only for your domain
+- [ ] Use strong database passwords
+- [ ] Enable firewall
+- [ ] Keep dependencies updated
+
+### Performance
+- [ ] Build client with `npm run build`
+- [ ] Enable gzip compression
+- [ ] Use CDN for static assets (optional)
+- [ ] Set up database indexes
+- [ ] Configure Redis caching
+
+### Monitoring
+- [ ] Set up error logging
+- [ ] Monitor server resources
+- [ ] Set up uptime monitoring
+- [ ] Configure backup strategy
+
+### Database
+- [ ] Run migrations
+- [ ] Set up automated backups
+- [ ] Use connection pooling
+- [ ] Monitor query performance
+
+---
+
+## 💰 Cost Estimates
+
+### Free Tier Options
+
+| Service | Free Tier | Limitations |
+|---------|-----------|-------------|
+| **Heroku** | Yes | Sleeps after 30min inactivity |
+| **Railway** | $5 credit/month | Limited resources |
+| **Render** | Yes | Slower performance |
+| **Netlify** | Yes (client only) | 100GB bandwidth |
+| **Vercel** | Yes (client only) | 100GB bandwidth |
+
+### Paid Options
+
+| Service | Cost/Month | Best For |
+|---------|------------|----------|
+| **DigitalOcean** | $6-12 | Full control |
+| **Heroku** | $7-25 | Easy management |
+| **AWS** | $10-50+ | Scalability |
+| **Railway** | $10-20 | Modern apps |
+
+---
+
+## 🔄 Updating Your Deployment
+
+### Docker
 
 ```bash
-# Backup Redis data
-cp /var/lib/redis/dump.rdb /backups/redis/dump_$(date +%Y%m%d).rdb
+# Pull latest code
+git pull
+
+# Rebuild and restart
+docker-compose down
+docker-compose build
+docker-compose up -d
 ```
 
----
-
-## Scaling Considerations
-
-### Horizontal Scaling
-
-- Deploy multiple server instances behind load balancer
-- Use Redis pub/sub for cross-server communication
-- Enable sticky sessions for WebSocket connections
-- Scale MongoDB with replica sets and sharding
-
-### Vertical Scaling
-
-- Increase CPU/memory for server containers
-- Optimize MongoDB indexes and queries
-- Tune Redis memory limits
-- Enable connection pooling
-
-### Load Balancing
-
-Configure load balancer for WebSocket support:
-
-```nginx
-upstream backend {
-    ip_hash;  # Sticky sessions
-    server server1:3001;
-    server server2:3001;
-    server server3:3001;
-}
-```
-
----
-
-## Security Hardening
-
-### Application Security
-
-- Use environment variables for secrets
-- Enable rate limiting
-- Implement input validation
-- Use security headers (helmet)
-- Enable CORS with specific origins
-- Sanitize user input
-- Use parameterized queries
-
-### Network Security
-
-- Use private networks for backend services
-- Enable firewall rules
-- Use VPN for database access
-- Implement DDoS protection
-- Use WAF (Web Application Firewall)
-
-### Database Security
-
-- Enable authentication
-- Use strong passwords
-- Limit network access
-- Enable encryption at rest
-- Enable encryption in transit
-- Regular security updates
-
----
-
-## Rollback Procedures
-
-### Docker Rollback
+### Heroku
 
 ```bash
-# Rollback to previous version
-docker-compose -f docker-compose.prod.yml down
-docker-compose -f docker-compose.prod.yml up -d --scale server=3 \
-  --build --force-recreate
+git push heroku main
 ```
 
-### Kubernetes Rollback
+### VPS
 
 ```bash
-# Rollback deployment
-kubectl rollout undo deployment/collab-editor-server -n collab-editor
+# Pull latest code
+cd /var/www/collab-editor
+git pull
 
-# Rollback to specific revision
-kubectl rollout undo deployment/collab-editor-server --to-revision=2 -n collab-editor
+# Rebuild
+cd client && npm run build
+cd ../server && npm run build
 
-# Check rollout status
-kubectl rollout status deployment/collab-editor-server -n collab-editor
-```
-
-### Database Rollback
-
-```bash
-# Restore from backup
-mongorestore \
-  --uri="mongodb://username:password@localhost:27017/collaborative_editor" \
-  --drop \
-  /backups/mongodb/20250116_120000
+# Restart
+pm2 restart all
 ```
 
 ---
 
-## Post-Deployment Verification
+## 🐛 Troubleshooting Deployment
 
-### Smoke Tests
+### "Cannot connect to database"
 
 ```bash
-# Health checks
-curl https://yourdomain.com/health/ready
+# Check database is running
+docker-compose ps  # Docker
+systemctl status postgresql  # VPS
 
-# API test
-curl -X POST https://yourdomain.com/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password"}'
+# Check connection string
+echo $DATABASE_URL
 
-# WebSocket test
-wscat -c wss://yourdomain.com?token=YOUR_TOKEN&documentId=DOC_ID
+# Test connection
+psql $DATABASE_URL
 ```
 
-### Monitoring Checks
+### "WebSocket connection failed"
 
-- Verify metrics are being collected
-- Check error rates are normal
-- Verify all services are healthy
-- Check database connections
-- Monitor resource usage
+- Check firewall allows port 3001
+- Verify WS_PORT in environment
+- Check Nginx WebSocket configuration
+- Ensure HTTPS for wss:// connections
 
----
+### "502 Bad Gateway"
 
-## Support and Maintenance
+- Server not running: `pm2 status`
+- Wrong port in Nginx config
+- Firewall blocking connection
 
-### Regular Maintenance Tasks
+### "Out of memory"
 
-- Review and rotate logs
-- Update dependencies
-- Apply security patches
-- Review and optimize database indexes
-- Monitor and optimize performance
-- Review and update documentation
-
-### Incident Response
-
-1. Identify the issue
-2. Check monitoring and logs
-3. Assess impact and severity
-4. Implement fix or rollback
-5. Verify resolution
-6. Document incident and lessons learned
+- Increase server resources
+- Check for memory leaks
+- Optimize database queries
+- Use Redis caching
 
 ---
 
-## Additional Resources
+## 📚 Additional Resources
 
-- [API Documentation](./API.md)
-- [WebSocket Protocol](./WEBSOCKET.md)
-- [Main README](../README.md)
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
+### Documentation
 - [Docker Documentation](https://docs.docker.com/)
+- [Heroku Dev Center](https://devcenter.heroku.com/)
+- [DigitalOcean Tutorials](https://www.digitalocean.com/community/tutorials)
+- [Nginx Documentation](https://nginx.org/en/docs/)
+
+### Tools
+- [PM2 Documentation](https://pm2.keymetrics.io/)
+- [Let's Encrypt](https://letsencrypt.org/) - Free SSL
+- [Cloudflare](https://www.cloudflare.com/) - CDN and DDoS protection
+
+---
+
+## 🎓 Learning Path
+
+1. **Start Simple**: Deploy to Heroku or Railway (free tier)
+2. **Learn Docker**: Use Docker Compose locally
+3. **Try VPS**: Deploy to DigitalOcean for more control
+4. **Scale Up**: Move to AWS/Azure when you need more
+
+---
+
+## 📞 Need Help?
+
+- Check logs: `docker-compose logs` or `pm2 logs`
+- Review error messages carefully
+- Search for specific errors online
+- Ask in developer communities
+
+---
+
+**Remember**: Deployment is a learning process. Start simple, and gradually move to more complex setups as you learn!
+
+Good luck with your deployment! 🚀

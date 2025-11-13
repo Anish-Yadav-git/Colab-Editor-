@@ -2,13 +2,21 @@
 node_modules/
 .pnp
 .pnp.js
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Testing
 coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
 
 # Production
 dist/
 build/
+*.tgz
 
 # Environment variables
 .env
@@ -16,8 +24,11 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.local
 
 # Logs
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -27,6 +38,7 @@ lerna-debug.log*
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -34,6 +46,53 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+*~
 
 # TypeScript
 *.tsbuildinfo
+*.tsbuildinfo.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.cache
+
+# Docker
+.dockerignore
+
+# Redis
+dump.rdb
+
+# MongoDB
+data/
+.cache/mongodb-memory-server/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Misc
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vercel
+.serverless/
